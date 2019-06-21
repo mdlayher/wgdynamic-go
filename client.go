@@ -36,6 +36,12 @@ func NewClient(iface string) (*Client, error) {
 		return nil, err
 	}
 
+	return newClient(ifi.Name, addrs)
+}
+
+// newClient constructs a Client which communicates using well-known wg-dynamic
+// addresses. It is used as an entry point in tests.
+func newClient(iface string, addrs []net.Addr) (*Client, error) {
 	// Find a suitable link-local IPv6 address for wg-dynamic communication.
 	var llip net.IP
 	for _, a := range addrs {
@@ -61,12 +67,12 @@ func NewClient(iface string) (*Client, error) {
 		laddr: &net.TCPAddr{
 			IP:   llip,
 			Port: port,
-			Zone: ifi.Name,
+			Zone: iface,
 		},
 		raddr: &net.TCPAddr{
 			IP:   net.ParseIP(serverIP),
 			Port: port,
-			Zone: ifi.Name,
+			Zone: iface,
 		},
 	}, nil
 }
