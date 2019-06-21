@@ -26,8 +26,8 @@ func newKVParser(r io.Reader) *kvParser {
 
 // Next advances to the next key=value pair if possible.
 func (p *kvParser) Next() bool {
-	if !p.s.Scan() || p.s.Text() == "" {
-		// No more input or we've reached the end.
+	if p.err != nil || !p.s.Scan() || p.s.Text() == "" {
+		// Hit an error, no more input, or we've reached the end of input.
 		return false
 	}
 
