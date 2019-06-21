@@ -121,10 +121,11 @@ errno=0
 		t.Run(tt.name, func(t *testing.T) {
 			c, done := testClient(t, tt.res)
 
+			// Perform request and immediately capture the input sent to the
+			// server since no more requests will be made.
 			rip, err := c.RequestIP(tt.ipv4, tt.ipv6)
+			req := done()
 			if err != nil {
-				defer done()
-
 				if tt.ok {
 					t.Fatalf("failed to request IPs: %v", err)
 				}
@@ -138,15 +139,12 @@ errno=0
 
 				return
 			}
-
-			req := done()
-
 			if !tt.ok {
 				t.Fatal("expected an error, but none occurred")
 			}
 
 			if diff := cmp.Diff(tt.req, req); diff != "" {
-				t.Fatalf("unexpected  (-want +got):\n%s", diff)
+				t.Fatalf("unexpected request (-want +got):\n%s", diff)
 			}
 
 			// Save some test table duplication.
