@@ -9,11 +9,14 @@ import (
 	"time"
 )
 
-// The well-known server IP address and port for wg-dynamic.
-const (
-	serverIP = "fe80::"
-	port     = 970
-)
+// port is the well-known port for wg-dynamic.
+const port = 970
+
+// serverIP is the well-known server IPv6 address for wg-dynamic.
+var serverIP = &net.IPNet{
+	IP:   net.ParseIP("fe80::"),
+	Mask: net.CIDRMask(64, 128),
+}
 
 // A Client can request IP address assignment using the wg-dynamic protocol.
 type Client struct {
@@ -43,21 +46,8 @@ func NewClient(iface string) (*Client, error) {
 // addresses. It is used as an entry point in tests.
 func newClient(iface string, addrs []net.Addr) (*Client, error) {
 	// Find a suitable link-local IPv6 address for wg-dynamic communication.
-	var llip net.IP
-	for _, a := range addrs {
-		ipn, ok := a.(*net.IPNet)
-		if !ok {
-			continue
-		}
-
-		// Only look for link-local IPv6 addresses.
-		if ipn.IP.To4() == nil && ipn.IP.IsLinkLocalUnicast() {
-			llip = ipn.IP
-			break
-		}
-	}
-
-	if llip == nil {
+	llip, ok := linkLocalIPv6(addrs)
+	if !ok {
 		return nil, fmt.Errorf("wgdynamic: no link-local IPv6 address for interface %q", iface)
 	}
 
@@ -65,12 +55,12 @@ func newClient(iface string, addrs []net.Addr) (*Client, error) {
 	// well-known server address.
 	return &Client{
 		laddr: &net.TCPAddr{
-			IP:   llip,
+			IP:   llip.IP,
 			Port: port,
 			Zone: iface,
 		},
 		raddr: &net.TCPAddr{
-			IP:   net.ParseIP(serverIP),
+			IP:   serverIP.IP,
 			Port: port,
 			Zone: iface,
 		},
@@ -89,36 +79,74 @@ type RequestIP struct {
 // be specified to request a specific IP address assignment. If ipv4 and/or ipv6
 // are nil, the client will not request a specific IP address for that family.
 func (c *Client) RequestIP(ipv4, ipv6 *net.IPNet) (*RequestIP, error) {
-	conn, err := net.DialTCP("tcp6", c.laddr, c.raddr)
+	var rip *RequestIP
+	err := c.execute(func(rw io.ReadWriter) error {
+		// TODO(mdlayher): can client specify a lease time or duration?
+		req := &RequestIP{IPv4: ipv4, IPv6: ipv6}
+		if err := sendRequestIP(rw, req); err != nil {
+			return err
+		}
+
+		// Begin parsing the response and ensure the server replied with the
+		// appropriate command.
+		p, cmd, err := parse(rw)
+		if err != nil {
+			return err
+		}
+		if cmd != "request_ip" {
+			return errors.New("wgdynamic: server sent malformed request_ip command response")
+		}
+
+		// Now that we've verified the command, parse the rest of its body.
+		rrip, err := parseRequestIP(p)
+		if err != nil {
+			return err
+		}
+
+		rip = rrip
+		return nil
+	})
 	if err != nil {
 		return nil, err
+	}
+
+	return rip, nil
+}
+
+// execute executes fn with a network connection backing rw.
+func (c *Client) execute(fn func(rw io.ReadWriter) error) error {
+	conn, err := net.DialTCP("tcp6", c.laddr, c.raddr)
+	if err != nil {
+		return err
 	}
 	defer conn.Close()
 
 	// Set a reasonable timeout.
 	// TODO(mdlayher): make configurable?
 	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
-		return nil, err
+		return err
 	}
 
-	if err := sendRequestIP(conn, ipv4, ipv6); err != nil {
-		return nil, err
-	}
-
-	return parseRequestIP(conn)
+	return fn(conn)
 }
 
 // sendRequestIP writes a request_ip command with optional IPv4/6 addresses
 // to w.
-func sendRequestIP(w io.Writer, ipv4, ipv6 *net.IPNet) error {
+func sendRequestIP(w io.Writer, rip *RequestIP) error {
 	// Build the command and attach optional parameters.
 	b := bytes.NewBufferString("request_ip=1\n")
 
-	if ipv4 != nil {
-		b.WriteString(fmt.Sprintf("ipv4=%s\n", ipv4.String()))
+	if rip.IPv4 != nil {
+		b.WriteString(fmt.Sprintf("ipv4=%s\n", rip.IPv4.String()))
 	}
-	if ipv6 != nil {
-		b.WriteString(fmt.Sprintf("ipv6=%s\n", ipv6.String()))
+	if rip.IPv6 != nil {
+		b.WriteString(fmt.Sprintf("ipv6=%s\n", rip.IPv6.String()))
+	}
+	if !rip.LeaseStart.IsZero() {
+		b.WriteString(fmt.Sprintf("leasestart=%d\n", rip.LeaseStart.Unix()))
+	}
+	if rip.LeaseTime > 0 {
+		b.WriteString(fmt.Sprintf("leasetime=%d\n", int(rip.LeaseTime.Seconds())))
 	}
 
 	// A final newline completes the request.
@@ -128,19 +156,23 @@ func sendRequestIP(w io.Writer, ipv4, ipv6 *net.IPNet) error {
 	return err
 }
 
-// parseRequestIP parses a RequestIP from a request_ip command response stream.
-func parseRequestIP(r io.Reader) (*RequestIP, error) {
-	var (
-		rip RequestIP
-		ok  bool
-	)
-
+// parse begins the parsing process for reading a request or response, returning
+// a kvParser and the command being performed.
+func parse(r io.Reader) (*kvParser, string, error) {
+	// Consume the first line to retrieve the command.
 	p := newKVParser(r)
+	if !p.Next() {
+		return nil, "", p.Err()
+	}
+
+	return p, p.Key(), nil
+}
+
+// parseRequestIP parses a RequestIP from a request_ip command response stream.
+func parseRequestIP(p *kvParser) (*RequestIP, error) {
+	var rip RequestIP
 	for p.Next() {
 		switch p.Key() {
-		case "request_ip":
-			// Verify the server replied to the requested command.
-			ok = p.String() == "1"
 		case "ipv4":
 			rip.IPv4 = p.IPNet(4)
 		case "ipv6":
@@ -155,9 +187,26 @@ func parseRequestIP(r io.Reader) (*RequestIP, error) {
 	if err := p.Err(); err != nil {
 		return nil, err
 	}
-	if !ok {
-		return nil, errors.New("wgdynamic: server sent malformed request_ip command response")
-	}
 
 	return &rip, nil
+}
+
+// linkLocalIPv6 finds a link-local IPv6 address in addrs. It returns true when
+// one is found.
+func linkLocalIPv6(addrs []net.Addr) (*net.IPNet, bool) {
+	var llip *net.IPNet
+	for _, a := range addrs {
+		ipn, ok := a.(*net.IPNet)
+		if !ok {
+			continue
+		}
+
+		// Only look for link-local IPv6 addresses.
+		if ipn.IP.To4() == nil && ipn.IP.IsLinkLocalUnicast() {
+			llip = ipn
+			break
+		}
+	}
+
+	return llip, llip != nil
 }

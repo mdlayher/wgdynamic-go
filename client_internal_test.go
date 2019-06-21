@@ -46,7 +46,7 @@ func Test_newClient(t *testing.T) {
 					Zone: iface,
 				},
 				raddr: &net.TCPAddr{
-					IP:   net.ParseIP(serverIP),
+					IP:   serverIP.IP,
 					Port: port,
 					Zone: iface,
 				},
