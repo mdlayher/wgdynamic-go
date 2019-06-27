@@ -68,7 +68,7 @@ func requestIPTests(t *testing.T) []subtest {
 				RequestIP: nil,
 			},
 			fn: func(t *testing.T, c *wgdynamic.Client) {
-				_, err := c.RequestIP(nil, nil)
+				_, err := c.RequestIP(nil)
 				if diff := cmp.Diff(errInternal, err); diff != "" {
 					t.Fatalf("unexpected error (-want +got):\n%s", diff)
 				}
@@ -82,7 +82,7 @@ func requestIPTests(t *testing.T) []subtest {
 				},
 			},
 			fn: func(t *testing.T, c *wgdynamic.Client) {
-				_, err := c.RequestIP(nil, nil)
+				_, err := c.RequestIP(nil)
 				if diff := cmp.Diff(errInternal, err); diff != "" {
 					t.Fatalf("unexpected error (-want +got):\n%s", diff)
 				}
@@ -100,7 +100,10 @@ func requestIPTests(t *testing.T) []subtest {
 				},
 			},
 			fn: func(t *testing.T, c *wgdynamic.Client) {
-				got, err := c.RequestIP(ipv4, ipv6)
+				got, err := c.RequestIP(&wgdynamic.RequestIP{
+					IPv4: ipv4,
+					IPv6: ipv6,
+				})
 				if err != nil {
 					t.Fatalf("failed to request IP: %v", err)
 				}
@@ -123,7 +126,7 @@ func requestIPTests(t *testing.T) []subtest {
 				},
 			},
 			fn: func(t *testing.T, c *wgdynamic.Client) {
-				got, err := c.RequestIP(nil, nil)
+				got, err := c.RequestIP(nil)
 				if err != nil {
 					t.Fatalf("failed to request IP: %v", err)
 				}

@@ -1,7 +1,6 @@
 package wgdynamic
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -67,22 +66,14 @@ func newClient(iface string, addrs []net.Addr) (*Client, error) {
 	}, nil
 }
 
-// RequestIP contains IP address assignments created in response to a
-// request_ip command.
-type RequestIP struct {
-	IPv4, IPv6 *net.IPNet
-	LeaseStart time.Time
-	LeaseTime  time.Duration
-}
-
-// RequestIP requests IP address assignment from a server. ipv4 and ipv6 can
-// be specified to request a specific IP address assignment. If ipv4 and/or ipv6
-// are nil, the client will not request a specific IP address for that family.
-func (c *Client) RequestIP(ipv4, ipv6 *net.IPNet) (*RequestIP, error) {
+// RequestIP requests IP address assignment from a server. Fields within req
+// can be specified to request specific IP address assignment parameters. If req
+// is nil, the server will automatically perform IP address assignment.
+func (c *Client) RequestIP(req *RequestIP) (*RequestIP, error) {
+	// Use a separate variable for the output so we don't overwrite the
+	// caller's request.
 	var rip *RequestIP
 	err := c.execute(func(rw io.ReadWriter) error {
-		// TODO(mdlayher): can client specify a lease time or duration?
-		req := &RequestIP{IPv4: ipv4, IPv6: ipv6}
 		if err := sendRequestIP(rw, req); err != nil {
 			return err
 		}
@@ -128,67 +119,6 @@ func (c *Client) execute(fn func(rw io.ReadWriter) error) error {
 	}
 
 	return fn(conn)
-}
-
-// sendRequestIP writes a request_ip command with optional IPv4/6 addresses
-// to w.
-func sendRequestIP(w io.Writer, rip *RequestIP) error {
-	// Build the command and attach optional parameters.
-	b := bytes.NewBufferString("request_ip=1\n")
-
-	if rip.IPv4 != nil {
-		b.WriteString(fmt.Sprintf("ipv4=%s\n", rip.IPv4.String()))
-	}
-	if rip.IPv6 != nil {
-		b.WriteString(fmt.Sprintf("ipv6=%s\n", rip.IPv6.String()))
-	}
-	if !rip.LeaseStart.IsZero() {
-		b.WriteString(fmt.Sprintf("leasestart=%d\n", rip.LeaseStart.Unix()))
-	}
-	if rip.LeaseTime > 0 {
-		b.WriteString(fmt.Sprintf("leasetime=%d\n", int(rip.LeaseTime.Seconds())))
-	}
-
-	// A final newline completes the request.
-	b.WriteString("\n")
-
-	_, err := b.WriteTo(w)
-	return err
-}
-
-// parse begins the parsing process for reading a request or response, returning
-// a kvParser and the command being performed.
-func parse(r io.Reader) (*kvParser, string, error) {
-	// Consume the first line to retrieve the command.
-	p := newKVParser(r)
-	if !p.Next() {
-		return nil, "", p.Err()
-	}
-
-	return p, p.Key(), nil
-}
-
-// parseRequestIP parses a RequestIP from a request_ip command response stream.
-func parseRequestIP(p *kvParser) (*RequestIP, error) {
-	var rip RequestIP
-	for p.Next() {
-		switch p.Key() {
-		case "ipv4":
-			rip.IPv4 = p.IPNet(4)
-		case "ipv6":
-			rip.IPv6 = p.IPNet(6)
-		case "leasestart":
-			rip.LeaseStart = time.Unix(int64(p.Int()), 0)
-		case "leasetime":
-			rip.LeaseTime = time.Duration(p.Int()) * time.Second
-		}
-	}
-
-	if err := p.Err(); err != nil {
-		return nil, err
-	}
-
-	return &rip, nil
 }
 
 // linkLocalIPv6 finds a link-local IPv6 address in addrs. It returns true when

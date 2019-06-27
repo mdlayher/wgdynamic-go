@@ -20,8 +20,7 @@ func TestClientRequestIP(t *testing.T) {
 
 	tests := []struct {
 		name, res, req string
-		ipv4, ipv6     *net.IPNet
-		rip            *wgdynamic.RequestIP
+		in, out        *wgdynamic.RequestIP
 		ok             bool
 		err            *wgdynamic.Error
 	}{
@@ -54,7 +53,7 @@ leasetime=10
 errno=0
 
 `,
-			rip: &wgdynamic.RequestIP{
+			out: &wgdynamic.RequestIP{
 				IPv4: ipv4,
 				IPv6: ipv6,
 			},
@@ -70,8 +69,10 @@ leasetime=10
 errno=0
 
 `,
-			ipv4: ipv4,
-			rip: &wgdynamic.RequestIP{
+			in: &wgdynamic.RequestIP{
+				IPv4: ipv4,
+			},
+			out: &wgdynamic.RequestIP{
 				IPv4: ipv4,
 			},
 			ok: true,
@@ -86,8 +87,10 @@ leasetime=10
 errno=0
 
 `,
-			ipv6: ipv6,
-			rip: &wgdynamic.RequestIP{
+			in: &wgdynamic.RequestIP{
+				IPv6: ipv6,
+			},
+			out: &wgdynamic.RequestIP{
 				IPv6: ipv6,
 			},
 			ok: true,
@@ -107,9 +110,11 @@ leasetime=10
 errno=0
 
 `,
-			ipv4: ipv4,
-			ipv6: ipv6,
-			rip: &wgdynamic.RequestIP{
+			in: &wgdynamic.RequestIP{
+				IPv4: ipv4,
+				IPv6: ipv6,
+			},
+			out: &wgdynamic.RequestIP{
 				IPv4: ipv4,
 				IPv6: ipv6,
 			},
@@ -123,7 +128,7 @@ errno=0
 
 			// Perform request and immediately capture the input sent to the
 			// server since no more requests will be made.
-			rip, err := c.RequestIP(tt.ipv4, tt.ipv6)
+			out, err := c.RequestIP(tt.in)
 			req := done()
 			if err != nil {
 				if tt.ok {
@@ -148,10 +153,10 @@ errno=0
 			}
 
 			// Save some test table duplication.
-			tt.rip.LeaseStart = time.Unix(1, 0)
-			tt.rip.LeaseTime = 10 * time.Second
+			tt.out.LeaseStart = time.Unix(1, 0)
+			tt.out.LeaseTime = 10 * time.Second
 
-			if diff := cmp.Diff(tt.rip, rip); diff != "" {
+			if diff := cmp.Diff(tt.out, out); diff != "" {
 				t.Fatalf("unexpected RequestIP (-want +got):\n%s", diff)
 			}
 		})
