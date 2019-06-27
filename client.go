@@ -1,10 +1,12 @@
 package wgdynamic
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -69,11 +71,14 @@ func newClient(iface string, addrs []net.Addr) (*Client, error) {
 // RequestIP requests IP address assignment from a server. Fields within req
 // can be specified to request specific IP address assignment parameters. If req
 // is nil, the server will automatically perform IP address assignment.
-func (c *Client) RequestIP(req *RequestIP) (*RequestIP, error) {
+//
+// The provided Context must be non-nil. If the context expires before the
+// request is complete, an error is returned.
+func (c *Client) RequestIP(ctx context.Context, req *RequestIP) (*RequestIP, error) {
 	// Use a separate variable for the output so we don't overwrite the
 	// caller's request.
 	var rip *RequestIP
-	err := c.execute(func(rw io.ReadWriter) error {
+	err := c.execute(ctx, func(rw io.ReadWriter) error {
 		if err := sendRequestIP(rw, req); err != nil {
 			return err
 		}
@@ -104,19 +109,42 @@ func (c *Client) RequestIP(req *RequestIP) (*RequestIP, error) {
 	return rip, nil
 }
 
+// deadlineNow is a time in the past that indicates a connection should
+// immediately time out.
+var deadlineNow = time.Unix(1, 0)
+
 // execute executes fn with a network connection backing rw.
-func (c *Client) execute(fn func(rw io.ReadWriter) error) error {
-	conn, err := net.DialTCP("tcp6", c.laddr, c.raddr)
+func (c *Client) execute(ctx context.Context, fn func(rw io.ReadWriter) error) error {
+	// The server expects the client to be bound to a specific local address.
+	d := &net.Dialer{LocalAddr: c.laddr}
+	conn, err := d.DialContext(ctx, "tcp6", c.raddr.String())
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 
-	// Set a reasonable timeout.
-	// TODO(mdlayher): make configurable?
-	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
-		return err
-	}
+	// Enable immediate connection cancelation via context by setting a deadline
+	// in the past if/when the context is canceled. If the request completes,
+	// doneC is closed and the select statement is unblocked.
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	doneC := make(chan struct{})
+	defer func() {
+		close(doneC)
+		wg.Wait()
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		select {
+		case <-ctx.Done():
+			// Cancel the request immediately.
+			_ = conn.SetDeadline(deadlineNow)
+		case <-doneC:
+		}
+	}()
 
 	return fn(conn)
 }

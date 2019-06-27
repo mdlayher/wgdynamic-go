@@ -1,6 +1,7 @@
 package wgdynamic_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -128,7 +129,7 @@ errno=0
 
 			// Perform request and immediately capture the input sent to the
 			// server since no more requests will be made.
-			out, err := c.RequestIP(tt.in)
+			out, err := c.RequestIP(context.Background(), tt.in)
 			req := done()
 			if err != nil {
 				if tt.ok {
@@ -160,6 +161,27 @@ errno=0
 				t.Fatalf("unexpected RequestIP (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestClientContextCancel(t *testing.T) {
+	const dur = 100 * time.Millisecond
+
+	c, done := testServer(t, &wgdynamic.Server{
+		RequestIP: func(_ net.Addr, _ *wgdynamic.RequestIP) (*wgdynamic.RequestIP, error) {
+			// Sleep longer than the client should wait.
+			time.Sleep(dur * 2)
+			return nil, nil
+		},
+	})
+	defer done()
+
+	ctx, cancel := context.WithTimeout(context.Background(), dur)
+	defer cancel()
+
+	_, err := c.RequestIP(ctx, nil)
+	if nerr, ok := err.(net.Error); !ok || !nerr.Timeout() {
+		t.Fatalf("expected timeout error, but got: %v", err)
 	}
 }
 
