@@ -164,6 +164,18 @@ errno=0
 	}
 }
 
+func TestClientRequestIPBadRequest(t *testing.T) {
+	// A zero-value Client is sufficient for this test, and will also panic
+	// if the network is accessed (meaning that the code is broken).
+	var c wgdynamic.Client
+	_, err := c.RequestIP(context.Background(), &wgdynamic.RequestIP{
+		LeaseStart: time.Unix(1, 0),
+	})
+	if err == nil {
+		t.Fatal("expected an error but none occurred")
+	}
+}
+
 func TestClientContextCancel(t *testing.T) {
 	const dur = 100 * time.Millisecond
 

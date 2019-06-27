@@ -75,6 +75,11 @@ func newClient(iface string, addrs []net.Addr) (*Client, error) {
 // The provided Context must be non-nil. If the context expires before the
 // request is complete, an error is returned.
 func (c *Client) RequestIP(ctx context.Context, req *RequestIP) (*RequestIP, error) {
+	// Don't allow the client to set lease start.
+	if req != nil && !req.LeaseStart.IsZero() {
+		return nil, errors.New("wgdynamic: clients cannot specify a lease start time")
+	}
+
 	// Use a separate variable for the output so we don't overwrite the
 	// caller's request.
 	var rip *RequestIP

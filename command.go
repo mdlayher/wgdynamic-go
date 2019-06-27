@@ -8,12 +8,34 @@ import (
 	"time"
 )
 
-// RequestIP contains IP address assignments created in response to a
-// request_ip command.
+// RequestIP contains IP address requests or assignments, depending on whether
+// the structure originated with a client or server.
 type RequestIP struct {
+	// IPv4 and IPv6 specify IP addresses with subnet masks.
+	//
+	// For clients, these request that specific IP addresses are assigned to
+	// the client. If nil, no specific IP addresses are requested.
+	//
+	// For servers, these specify the IP address assignments which are sent
+	// to a client. If nil, no IP address will be specified for the given
+	// address family.
 	IPv4, IPv6 *net.IPNet
+
+	// LeaseStart specifies the time that an IP address lease begins.
+	//
+	// This option only applies to servers and an error will be returned if it
+	// is used in a client request.
 	LeaseStart time.Time
-	LeaseTime  time.Duration
+
+	// LeaseTime specifies the duration of an IP address lease. It can be used
+	// along with LeaseStart to calculate when a lease expires.
+	//
+	// For clients, it indicates that the client would prefer a lease for at
+	// least this duration of time.
+	//
+	// For servers, it indicates that the IP address assignment expires after
+	// this duration of time has elapsed.
+	LeaseTime time.Duration
 }
 
 // TODO(mdlayher): request_ip protocol version is hardcoded at 1 and should
