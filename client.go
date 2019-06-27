@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"sync"
 	"time"
 )
 
@@ -128,30 +127,30 @@ func (c *Client) execute(ctx context.Context, fn func(rw io.ReadWriter) error) e
 	}
 	defer conn.Close()
 
-	// Enable immediate connection cancelation via context by setting a deadline
-	// in the past if/when the context is canceled. If the request completes,
-	// doneC is closed and the select statement is unblocked.
-	var wg sync.WaitGroup
-	wg.Add(1)
+	// Enable immediate connection cancelation via context by using the context's
+	// deadline and also setting a deadline in the past if/when the context is
+	// canceled. This pattern courtesy of @acln from #networking on Gophers Slack.
+	dl, _ := ctx.Deadline()
+	if err := conn.SetDeadline(dl); err != nil {
+		return err
+	}
 
-	doneC := make(chan struct{})
-	defer func() {
-		close(doneC)
-		wg.Wait()
-	}()
+	errC := make(chan error)
+	go func() { errC <- fn(conn) }()
 
-	go func() {
-		defer wg.Done()
-
-		select {
-		case <-ctx.Done():
-			// Cancel the request immediately.
-			_ = conn.SetDeadline(deadlineNow)
-		case <-doneC:
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.Canceled {
+			if err := conn.SetDeadline(deadlineNow); err != nil {
+				return err
+			}
 		}
-	}()
 
-	return fn(conn)
+		<-errC
+		return ctx.Err()
+	case err := <-errC:
+		return err
+	}
 }
 
 // linkLocalIPv6 finds a link-local IPv6 address in addrs. It returns true when

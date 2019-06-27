@@ -176,7 +176,7 @@ func TestClientRequestIPBadRequest(t *testing.T) {
 	}
 }
 
-func TestClientContextCancel(t *testing.T) {
+func TestClientContextDeadlineExceeded(t *testing.T) {
 	const dur = 100 * time.Millisecond
 
 	c, done := testServer(t, &wgdynamic.Server{
@@ -194,6 +194,31 @@ func TestClientContextCancel(t *testing.T) {
 	_, err := c.RequestIP(ctx, nil)
 	if nerr, ok := err.(net.Error); !ok || !nerr.Timeout() {
 		t.Fatalf("expected timeout error, but got: %v", err)
+	}
+}
+
+func TestClientContextCanceled(t *testing.T) {
+	const dur = 100 * time.Millisecond
+
+	c, done := testServer(t, &wgdynamic.Server{
+		RequestIP: func(_ net.Addr, _ *wgdynamic.RequestIP) (*wgdynamic.RequestIP, error) {
+			// Sleep longer than the client should wait.
+			time.Sleep(dur * 2)
+			return nil, nil
+		},
+	})
+	defer done()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		<-time.After(dur)
+		cancel()
+	}()
+
+	_, got := c.RequestIP(ctx, nil)
+	if diff := cmp.Diff(context.Canceled.Error(), got.Error()); diff != "" {
+		t.Fatalf("unexpected error (-want +got):\n%s", diff)
 	}
 }
 
