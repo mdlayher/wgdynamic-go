@@ -30,6 +30,8 @@ type Server struct {
 	// are discarded.
 	Log *log.Logger
 
+	// Guards internal fields set when Serve is first called.
+	mu sync.Mutex
 	l  net.Listener
 	wg *sync.WaitGroup
 }
@@ -64,8 +66,10 @@ func Listen(iface string) (net.Listener, error) {
 // Serve serves incoming requests by accepting connections from l.
 func (s *Server) Serve(l net.Listener) error {
 	// Initialize any necessary fields before starting the listener loop.
+	s.mu.Lock()
 	s.l = l
 	s.wg = &sync.WaitGroup{}
+	s.mu.Unlock()
 
 	for {
 		c, err := l.Accept()
@@ -89,6 +93,9 @@ func (s *Server) Serve(l net.Listener) error {
 
 // Close closes the server listener and waits for all requests to complete.
 func (s *Server) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	defer s.wg.Wait()
 	return s.l.Close()
 }
