@@ -88,11 +88,16 @@ func (p *kvParser) IPNet(family int) *net.IPNet {
 		return nil
 	}
 
-	_, ipn, err := net.ParseCIDR(p.v)
+	ip, ipn, err := net.ParseCIDR(p.v)
 	if err != nil {
 		p.err = err
 		return nil
 	}
+
+	// We want to return the actual allocated IP address along with its proper
+	// subnet mask, so replace the first network address with the actual IP
+	// address.
+	ipn.IP = ip
 
 	// Verify correct address family using net.IP.To4, per the documentation.
 	switch family {

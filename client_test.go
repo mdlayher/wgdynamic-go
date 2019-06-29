@@ -121,6 +121,21 @@ errno=0
 			},
 			ok: true,
 		},
+		{
+			name: "OK address within subnet",
+			req:  "request_ip=1\n\n",
+			res: `request_ip=1
+ipv6=2001:db8::ffff/64
+leasestart=1
+leasetime=10
+errno=0
+
+`,
+			out: &wgdynamic.RequestIP{
+				IPv6: mustIPNet("2001:db8::ffff/64"),
+			},
+			ok: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -279,10 +294,13 @@ func testClient(t *testing.T, res string) (*wgdynamic.Client, func() string) {
 }
 
 func mustIPNet(s string) *net.IPNet {
-	_, ipn, err := net.ParseCIDR(s)
+	ip, ipn, err := net.ParseCIDR(s)
 	if err != nil {
 		panicf("failed to parse CIDR: %v", err)
 	}
+
+	// See commment in kvParser.IPNet.
+	ipn.IP = ip
 
 	return ipn
 }
