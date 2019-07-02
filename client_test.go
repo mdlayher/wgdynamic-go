@@ -278,7 +278,9 @@ func testClient(t *testing.T, res string) (*wgdynamic.Client, func() string) {
 	}()
 
 	// Point the Client at our ephemeral server.
-	c := wgdynamic.TempClient(l.Addr().(*net.TCPAddr))
+	c := &wgdynamic.Client{
+		RemoteAddr: l.Addr().(*net.TCPAddr),
+	}
 
 	return c, func() string {
 		defer close(reqC)

@@ -40,12 +40,12 @@ func Test_newClient(t *testing.T) {
 				mustIPNet("fe80::1/128"),
 			},
 			c: &Client{
-				laddr: &net.TCPAddr{
+				LocalAddr: &net.TCPAddr{
 					IP:   net.ParseIP("fe80::1"),
 					Port: port,
 					Zone: iface,
 				},
-				raddr: &net.TCPAddr{
+				RemoteAddr: &net.TCPAddr{
 					IP:   serverIP.IP,
 					Port: port,
 					Zone: iface,

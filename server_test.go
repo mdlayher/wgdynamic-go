@@ -163,7 +163,9 @@ func testServer(t *testing.T, s *wgdynamic.Server) (*wgdynamic.Client, func()) {
 		}
 	}()
 
-	c := wgdynamic.TempClient(l.Addr().(*net.TCPAddr))
+	c := &wgdynamic.Client{
+		RemoteAddr: l.Addr().(*net.TCPAddr),
+	}
 
 	return c, func() {
 		defer wg.Wait()
