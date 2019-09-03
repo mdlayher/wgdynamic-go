@@ -3,8 +3,6 @@ package wgdynamic
 import (
 	"net"
 	"testing"
-
-	"github.com/google/go-cmp/cmp"
 )
 
 func Test_newClient(t *testing.T) {
@@ -13,7 +11,6 @@ func Test_newClient(t *testing.T) {
 	tests := []struct {
 		name  string
 		addrs []net.Addr
-		c     *Client
 		ok    bool
 	}{
 		{
@@ -39,25 +36,13 @@ func Test_newClient(t *testing.T) {
 				// Link-local IPv6 address.
 				mustIPNet("fe80::1/128"),
 			},
-			c: &Client{
-				LocalAddr: &net.TCPAddr{
-					IP:   net.ParseIP("fe80::1"),
-					Port: port,
-					Zone: iface,
-				},
-				RemoteAddr: &net.TCPAddr{
-					IP:   serverIP.IP,
-					Port: port,
-					Zone: iface,
-				},
-			},
 			ok: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, err := newClient(iface, tt.addrs)
+			_, err := newClient(iface, tt.addrs)
 			if err != nil {
 				if tt.ok {
 					t.Fatalf("failed to create client: %v", err)
@@ -68,10 +53,6 @@ func Test_newClient(t *testing.T) {
 			}
 			if !tt.ok {
 				t.Fatal("expected an error, but none occurred")
-			}
-
-			if diff := cmp.Diff(tt.c, c, cmp.AllowUnexported(Client{})); diff != "" {
-				t.Fatalf("unexpected Client (-want +got):\n%s", diff)
 			}
 		})
 	}
