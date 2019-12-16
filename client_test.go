@@ -28,11 +28,6 @@ func TestClientRequestIP(t *testing.T) {
 		err            *wgdynamic.Error
 	}{
 		{
-			name: "bad response command",
-			req:  "request_ip=1\n\n",
-			res:  "foo=1\n\n",
-		},
-		{
 			name: "protocol error",
 			req:  "request_ip=1\n\n",
 			res: `request_ip=1

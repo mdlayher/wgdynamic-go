@@ -37,12 +37,19 @@ type RequestIP struct {
 	LeaseTime time.Duration
 }
 
+// Indicates if a command originates from client or server since the two are
+// marshaled into slightly different forms.
+const (
+	fromServer = false
+	fromClient = true
+)
+
 // TODO(mdlayher): request_ip protocol version is hardcoded at 1 and should
 // be parameterized in some way.
 
 // sendRequestIP writes a request_ip command with optional IPv4/6 addresses
 // to w.
-func sendRequestIP(w io.Writer, rip *RequestIP) error {
+func sendRequestIP(w io.Writer, isClient bool, rip *RequestIP) error {
 	if rip == nil {
 		// No additional parameters to send.
 		_, err := w.Write([]byte("request_ip=1\n\n"))
@@ -50,7 +57,11 @@ func sendRequestIP(w io.Writer, rip *RequestIP) error {
 	}
 
 	// Build the command and attach optional parameters.
-	b := bytes.NewBufferString("request_ip=1\n")
+	var b bytes.Buffer
+	if isClient {
+		// Only clients issue the command header.
+		b.WriteString("request_ip=1\n")
+	}
 
 	for _, ip := range rip.IPs {
 		b.WriteString(fmt.Sprintf("ip=%s\n", ip.String()))
@@ -91,9 +102,9 @@ func parseRequestIP(p *kvParser) (*RequestIP, error) {
 	return &rip, nil
 }
 
-// parse begins the parsing process for reading a request or response, returning
+// parseRequest begins the parsing process for reading a client request, returning
 // a kvParser and the command being performed.
-func parse(r io.Reader) (*kvParser, string, error) {
+func parseRequest(r io.Reader) (*kvParser, string, error) {
 	// Consume the first line to retrieve the command.
 	p := newKVParser(r)
 	if !p.Next() {
