@@ -17,6 +17,8 @@ func TestClientRequestIP(t *testing.T) {
 	var (
 		ipv4 = mustIPNet("192.0.2.1/32")
 		ipv6 = mustIPNet("2001:db8::1/128")
+
+		ips = []*net.IPNet{ipv4, ipv6}
 	)
 
 	tests := []struct {
@@ -47,77 +49,74 @@ errmsg=Out of IPs
 			name: "OK nil ipv4/6",
 			req:  "request_ip=1\n\n",
 			res: `request_ip=1
-ipv4=192.0.2.1/32
-ipv6=2001:db8::1/128
+ip=192.0.2.1/32
+ip=2001:db8::1/128
 leasestart=1
 leasetime=10
 errno=0
 
 `,
 			out: &wgdynamic.RequestIP{
-				IPv4: ipv4,
-				IPv6: ipv6,
+				IPs: ips,
 			},
 			ok: true,
 		},
 		{
 			name: "OK ipv4",
-			req:  "request_ip=1\nipv4=192.0.2.1/32\n\n",
+			req:  "request_ip=1\nip=192.0.2.1/32\n\n",
 			res: `request_ip=1
-ipv4=192.0.2.1/32
+ip=192.0.2.1/32
 leasestart=1
 leasetime=10
 errno=0
 
 `,
 			in: &wgdynamic.RequestIP{
-				IPv4: ipv4,
+				IPs: []*net.IPNet{ipv4},
 			},
 			out: &wgdynamic.RequestIP{
-				IPv4: ipv4,
+				IPs: []*net.IPNet{ipv4},
 			},
 			ok: true,
 		},
 		{
 			name: "OK ipv6",
-			req:  "request_ip=1\nipv6=2001:db8::1/128\n\n",
+			req:  "request_ip=1\nip=2001:db8::1/128\n\n",
 			res: `request_ip=1
-ipv6=2001:db8::1/128
+ip=2001:db8::1/128
 leasestart=1
 leasetime=10
 errno=0
 
 `,
 			in: &wgdynamic.RequestIP{
-				IPv6: ipv6,
+				IPs: []*net.IPNet{ipv6},
 			},
 			out: &wgdynamic.RequestIP{
-				IPv6: ipv6,
+				IPs: []*net.IPNet{ipv6},
 			},
 			ok: true,
 		},
 		{
 			name: "OK ipv4/6",
 			req: `request_ip=1
-ipv4=192.0.2.1/32
-ipv6=2001:db8::1/128
+ip=192.0.2.1/32
+ip=2001:db8::1/128
 
 `,
 			res: `request_ip=1
-ipv4=192.0.2.1/32
-ipv6=2001:db8::1/128
+ip=192.0.2.1/32
+ip=2001:db8::1/128
 leasestart=1
 leasetime=10
 errno=0
 
 `,
 			in: &wgdynamic.RequestIP{
-				IPv4: ipv4,
-				IPv6: ipv6,
+				IPs: ips,
 			},
 			out: &wgdynamic.RequestIP{
-				IPv4: ipv4,
-				IPv6: ipv6,
+				IPs: ips,
 			},
 			ok: true,
 		},
@@ -125,14 +124,14 @@ errno=0
 			name: "OK address within subnet",
 			req:  "request_ip=1\n\n",
 			res: `request_ip=1
-ipv6=2001:db8::ffff/64
+ip=2001:db8::ffff/64
 leasestart=1
 leasetime=10
 errno=0
 
 `,
 			out: &wgdynamic.RequestIP{
-				IPv6: mustIPNet("2001:db8::ffff/64"),
+				IPs: []*net.IPNet{mustIPNet("2001:db8::ffff/64")},
 			},
 			ok: true,
 		},

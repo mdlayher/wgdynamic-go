@@ -11,15 +11,14 @@ import (
 // RequestIP contains IP address requests or assignments, depending on whether
 // the structure originated with a client or server.
 type RequestIP struct {
-	// IPv4 and IPv6 specify IP addresses with subnet masks.
+	// IPs specify IP addresses with subnet masks.
 	//
 	// For clients, these request that specific IP addresses are assigned to
 	// the client. If nil, no specific IP addresses are requested.
 	//
 	// For servers, these specify the IP address assignments which are sent
-	// to a client. If nil, no IP address will be specified for the given
-	// address family.
-	IPv4, IPv6 *net.IPNet
+	// to a client. If nil, no IP addresses will be specified.
+	IPs []*net.IPNet
 
 	// LeaseStart specifies the time that an IP address lease begins.
 	//
@@ -53,12 +52,10 @@ func sendRequestIP(w io.Writer, rip *RequestIP) error {
 	// Build the command and attach optional parameters.
 	b := bytes.NewBufferString("request_ip=1\n")
 
-	if rip.IPv4 != nil {
-		b.WriteString(fmt.Sprintf("ipv4=%s\n", rip.IPv4.String()))
+	for _, ip := range rip.IPs {
+		b.WriteString(fmt.Sprintf("ip=%s\n", ip.String()))
 	}
-	if rip.IPv6 != nil {
-		b.WriteString(fmt.Sprintf("ipv6=%s\n", rip.IPv6.String()))
-	}
+
 	if !rip.LeaseStart.IsZero() {
 		b.WriteString(fmt.Sprintf("leasestart=%d\n", rip.LeaseStart.Unix()))
 	}
@@ -78,10 +75,8 @@ func parseRequestIP(p *kvParser) (*RequestIP, error) {
 	var rip RequestIP
 	for p.Next() {
 		switch p.Key() {
-		case "ipv4":
-			rip.IPv4 = p.IPNet(4)
-		case "ipv6":
-			rip.IPv6 = p.IPNet(6)
+		case "ip":
+			rip.IPs = append(rip.IPs, p.IPNet())
 		case "leasestart":
 			rip.LeaseStart = time.Unix(int64(p.Int()), 0)
 		case "leasetime":

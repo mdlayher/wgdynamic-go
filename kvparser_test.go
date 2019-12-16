@@ -30,23 +30,7 @@ func Test_kvParserError(t *testing.T) {
 			name: "bad IPNet",
 			s:    "hello=string\n\n",
 			fn: func(p *kvParser) {
-				// Family doesn't matter; IPNet check is performed before
-				// family check.
-				_ = p.IPNet(4)
-			},
-		},
-		{
-			name: "bad IPNet IPv4",
-			s:    "hello=2001:db8::1/128\n\n",
-			fn: func(p *kvParser) {
-				_ = p.IPNet(4)
-			},
-		},
-		{
-			name: "bad IPNet IPv6",
-			s:    "hello=192.0.2.1/32\n\n",
-			fn: func(p *kvParser) {
-				_ = p.IPNet(6)
+				_ = p.IPNet()
 			},
 		},
 	}

@@ -49,9 +49,10 @@ func requestIPTests(t *testing.T) []subtest {
 		ipv4 = mustIPNet("192.0.2.1/32")
 		ipv6 = mustIPNet("2001:db8::1/128")
 
+		ips = []*net.IPNet{ipv4, ipv6}
+
 		want = &wgdynamic.RequestIP{
-			IPv4:       ipv4,
-			IPv6:       ipv6,
+			IPs:        ips,
 			LeaseStart: time.Unix(1, 0),
 			LeaseTime:  10 * time.Second,
 		}
@@ -102,8 +103,7 @@ func requestIPTests(t *testing.T) []subtest {
 			},
 			fn: func(t *testing.T, c *wgdynamic.Client) {
 				got, err := c.RequestIP(context.Background(), &wgdynamic.RequestIP{
-					IPv4: ipv4,
-					IPv6: ipv6,
+					IPs: ips,
 				})
 				if err != nil {
 					t.Fatalf("failed to request IP: %v", err)
@@ -119,7 +119,7 @@ func requestIPTests(t *testing.T) []subtest {
 			s: &wgdynamic.Server{
 				RequestIP: func(_ net.Addr, r *wgdynamic.RequestIP) (*wgdynamic.RequestIP, error) {
 					// Ensure the Client does not request any addresses.
-					if r.IPv4 != nil || r.IPv6 != nil {
+					for len(r.IPs) > 0 {
 						return nil, errors.New("could not assign requested addresses")
 					}
 
