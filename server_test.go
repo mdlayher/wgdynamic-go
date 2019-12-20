@@ -56,11 +56,6 @@ func requestIPTests(t *testing.T) []subtest {
 			LeaseStart: time.Unix(1, 0),
 			LeaseTime:  10 * time.Second,
 		}
-
-		errInternal = &wgdynamic.Error{
-			Number:  1,
-			Message: "Internal server error",
-		}
 	)
 
 	return []subtest{
@@ -71,7 +66,7 @@ func requestIPTests(t *testing.T) []subtest {
 			},
 			fn: func(t *testing.T, c *wgdynamic.Client) {
 				_, err := c.RequestIP(context.Background(), nil)
-				if diff := cmp.Diff(errInternal, err); diff != "" {
+				if diff := cmp.Diff(wgdynamic.ErrInvalidRequest, err); diff != "" {
 					t.Fatalf("unexpected error (-want +got):\n%s", diff)
 				}
 			},
@@ -85,7 +80,7 @@ func requestIPTests(t *testing.T) []subtest {
 			},
 			fn: func(t *testing.T, c *wgdynamic.Client) {
 				_, err := c.RequestIP(context.Background(), nil)
-				if diff := cmp.Diff(errInternal, err); diff != "" {
+				if diff := cmp.Diff(wgdynamic.ErrInvalidRequest, err); diff != "" {
 					t.Fatalf("unexpected error (-want +got):\n%s", diff)
 				}
 			},
